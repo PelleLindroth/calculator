@@ -1,6 +1,10 @@
 <template>
   <div class="calculator-wrapper">
     <div class="display">{{ expression }}</div>
+    <button @click="clearExpression" class="clear">C</button>
+    <button @click="toggleMinusPlus" class="toggle-plus-minus">+/-</button>
+    <button @click="calculatePercent" class="percentage">%</button>
+    <button @click="enterOperator" class="power operator">^</button>
     <button @click="enterChar" class="one number">1</button>
     <button @click="enterChar" class="two number">2</button>
     <button @click="enterChar" class="three number">3</button>
@@ -13,9 +17,14 @@
     <button @click="enterChar" class="eight number">8</button>
     <button @click="enterChar" class="nine number">9</button>
     <button @click="enterOperator" class="multiply operator">*</button>
-    <button @click="calculate" class="equals">=</button>
+    <button @click="calculateReversedPolish" class="equals">=</button>
     <button @click="enterChar" class="zero number">0</button>
+    <button @click="enterChar" class="decimal">.</button>
     <button @click="enterOperator" class="divide operator">/</button>
+    <button @click="enterOperator" class="operator">(</button>
+    <button @click="enterOperator" class="operator">)</button>
+    <button @click="calculateSqrt" class="operator">√</button>
+    <button @click="goBack" class="back-button">&lt;</button>
   </div>
 </template>
 
@@ -25,33 +34,72 @@ export default {
     return {
       operators: [
         {
+          char: '(',
+          value: 0,
+        },
+        {
+          char: ')',
+          value: 0,
+        },
+        {
           char: '+',
           value: 1,
+          calc(a, b) {
+            return a + b
+          },
         },
         {
           char: '-',
           value: 1,
+          calc(a, b) {
+            return a - b
+          },
         },
         {
           char: '*',
           value: 2,
+          calc(a, b) {
+            return a * b
+          },
         },
         {
           char: '/',
           value: 2,
+          calc(a, b) {
+            return a / b
+          },
         },
         {
           char: '^',
           value: 3,
+          calc(a, b) {
+            return Math.pow(a, b)
+          },
+        },
+        {
+          char: '√',
+          value: 3,
+          calc(a) {
+            return Math.sqrt(a)
+          },
         },
       ],
       reversedPolish: [],
       stack: [],
-      expression: '',
+      expression: '0',
     }
   },
   methods: {
-    calculate() {
+    calculateSqrt() {
+      let arr = this.expression.split(' ')
+
+      arr[arr.length - 1] = Math.sqrt(+arr[arr.length - 1])
+      this.expression = arr.join(' ')
+    },
+    clearExpression() {
+      this.expression = '0'
+    },
+    convertToReversedPolish() {
       const charArray = this.expression.trim().split(' ')
 
       if (isNaN(+charArray[charArray.length - 1])) {
@@ -62,10 +110,9 @@ export default {
         if (!isNaN(+char)) {
           this.reversedPolish.push(+char)
         } else {
-          if (this.stack.length == 0) {
+          if (this.stack.length == 0 || char === '(') {
             this.stack.push(char)
           } else {
-            console.log(this.stack[this.stack.length - 1])
             let value = this.operators.find(op => op.char == char).value
             let lastElValue = this.operators.find(
               op => op.char == this.stack.slice(-1)
@@ -75,43 +122,109 @@ export default {
               this.stack.push(char)
             } else {
               while (value <= lastElValue && this.stack.length > 0) {
-                console.log(lastElValue)
-                this.reversedPolish.push(this.stack.pop())
+                if (lastElValue != 0) {
+                  this.reversedPolish.push(this.stack.pop())
+                } else {
+                  this.stack.pop()
+                  break
+                }
 
-                if (this.stack.length > 1) {
+                if (this.stack.length) {
                   lastElValue = this.operators.find(
                     op => op.char == this.stack.slice(-1)
                   ).value
                 }
               }
-              this.stack.push(char)
+              if (char != ')') {
+                this.stack.push(char)
+              }
             }
           }
         }
       })
 
-      while (this.stack.length > 0) {
+      while (this.stack.length) {
         this.reversedPolish.push(this.stack.pop())
       }
-      console.log(this.reversedPolish)
-      console.log(this.stack)
-      // 12 + 6 * 3 - 5
+    },
+    calculateReversedPolish() {
+      this.convertToReversedPolish()
 
-      // 12 6 3 * + 5 -
-      // 12 18 + 5 -
-      // 30 5 -
-      // 25
+      for (let i = 0; i < this.reversedPolish.length; i++) {
+        if (this.reversedPolish[i] === '(' || this.reversedPolish[i] === ')') {
+          this.reversedPolish.splice(i, 1)
+        }
+      }
+
+      for (let i = 0; i < this.reversedPolish.length; i++) {
+        if (isNaN(this.reversedPolish[i])) {
+          let operator = this.operators.find(
+            op => op.char == this.reversedPolish[i]
+          )
+          const sum = operator.calc(
+            this.reversedPolish[i - 2],
+            this.reversedPolish[i - 1]
+          )
+          this.reversedPolish.splice(i - 2, 3, sum)
+
+          i -= 2
+        }
+      }
+
+      this.expression = this.reversedPolish[0].toString()
+      this.reversedPolish = []
+    },
+    calculatePercent() {
+      let arr = this.expression.split(' ')
+
+      if (arr[arr.length - 2] === '+' || arr[arr.length - 2] === '-') {
+        arr[arr.length - 1] = arr[arr.length - 1] / arr[arr.length - 3]
+      } else {
+        arr[arr.length - 1] = arr[arr.length - 1] / 100
+      }
+
+      this.expression = arr.join(' ')
     },
     enterChar(e) {
-      if (this.expression.endsWith(' 0')) {
+      if (this.expression === '0' && e.target.innerText != '.') {
+        this.expression = ''
+      }
+      if (this.expression.endsWith(' 0') && e.target.innerText != '.') {
         this.expression = this.expression.slice(0, -1)
       }
       this.expression += e.target.innerText
     },
     enterOperator(e) {
-      if (this.expression.slice(-1) != ' ' && this.expression != '') {
+      if (e.target.innerText === '(') {
+        this.expression += '' + e.target.innerText + ' '
+      } else if (e.target.innerText === ')') {
+        this.expression += ' ' + e.target.innerText
+      } else if (this.expression.slice(-1) != ' ' && this.expression != '') {
         this.expression += ' ' + e.target.innerText + ' '
       }
+    },
+    goBack() {
+      let arr = this.expression.split('')
+      if (arr[arr.length - 1] == ' ') {
+        arr.pop()
+        arr.pop()
+        arr.pop()
+      } else {
+        arr.pop()
+      }
+
+      this.expression = arr.join('')
+    },
+    toggleMinusPlus() {
+      let arr = this.expression.split(' ')
+
+      if (arr[arr.length - 1].startsWith('-')) {
+        arr[arr.length - 1] = arr[arr.length - 1].slice(1)
+      } else {
+        arr[arr.length - 1] = `-${arr[arr.length - 1]}`
+      }
+
+      this.expression = arr.join(' ')
     },
   },
 }
@@ -122,10 +235,10 @@ export default {
   background-color: #2e2727;
   display: grid;
   font-family: Arial, Helvetica, sans-serif;
-  gap: 2rem;
+  gap: 1.2rem;
   grid-template-columns: repeat (4, 1fr);
-  grid-template-rows: repeat (5, 1fr);
-  height: 50rem;
+  grid-template-rows: repeat (7, 1fr);
+  min-height: 58rem;
   max-width: 35rem;
   margin: 10rem auto;
   padding: 2rem;
@@ -166,38 +279,6 @@ export default {
 
   .equals {
     background-color: #000;
-    grid-column: 1 / span 2;
   }
-
-  // .one {
-  // }
-  // .two {
-  // }
-  // .three {
-  // }
-  // .plus {
-  // }
-  // .four {
-  // }
-  // .five {
-  // }
-  // .six {
-  // }
-  // .minus {
-  // }
-  // .seven {
-  // }
-  // .eight {
-  // }
-  // .nine {
-  // }
-  // .multiply {
-  // }
-  // .equals {
-  // }
-  // .zero {
-  // }
-  // .buttonide {
-  // }
 }
 </style>
